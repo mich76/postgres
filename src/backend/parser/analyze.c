@@ -983,8 +983,49 @@ transformOnConflictClause(ParseState *pstate,
 												makeAlias("excluded", NIL),
 												false, false);
 		exclRte->relkind = RELKIND_COMPOSITE_TYPE;
+<<<<<<< ours
 		exclRte->requiredPerms = 0;
 		/* other permissions fields in exclRte are already empty */
+=======
+		exclRelIndex = list_length(pstate->p_rtable);
+
+		/*
+		 * Build a targetlist for the EXCLUDED pseudo relation. Have to be
+		 * careful to use resnos that correspond to attnos of the underlying
+		 * relation.
+		 */
+		Assert(pstate->p_next_resno == 1);
+		for (attno = 0; attno < RelationGetNumberOfAttributes(targetrel); attno++)
+		{
+			Form_pg_attribute attr = targetrel->rd_att->attrs[attno];
+			char	   *name;
+
+			if (attr->attisdropped)
+			{
+				/*
+				 * can't use atttypid here, but it doesn't really matter what
+				 * type the Const claims to be.
+				 */
+				var = (Var *) makeNullConst(INT4OID, -1, InvalidOid);
+				name = "";
+			}
+			else
+			{
+				var = makeVar(exclRelIndex, attno + 1,
+							  attr->atttypid, attr->atttypmod,
+							  attr->attcollation,
+							  0);
+				var->location = -1;
+
+				name = NameStr(attr->attname);
+			}
+
+			Assert(pstate->p_next_resno == attno + 1);
+			te = makeTargetEntry((Expr *) var,
+								 pstate->p_next_resno++,
+								 name,
+								 false);
+>>>>>>> theirs
 
 		exclRelIndex = list_length(pstate->p_rtable);
 
@@ -2222,8 +2263,8 @@ transformUpdateTargetList(ParseState *pstate, List *origTlist)
 								EXPR_KIND_UPDATE_SOURCE);
 
 	/* Prepare to assign non-conflicting resnos to resjunk attributes */
-	if (pstate->p_next_resno <= pstate->p_target_relation->rd_rel->relnatts)
-		pstate->p_next_resno = pstate->p_target_relation->rd_rel->relnatts + 1;
+	if (pstate->p_next_resno <= RelationGetNumberOfAttributes(pstate->p_target_relation))
+		pstate->p_next_resno = RelationGetNumberOfAttributes(pstate->p_target_relation) + 1;
 
 	/* Prepare non-junk columns for assignment to target table */
 	target_rte = pstate->p_target_rangetblentry;
